@@ -170,6 +170,53 @@ window.HologramPlayer = (function () {
     loadGLBDino("models/rexi.glb", group, 0, initialAnim);
     loadGLBDino("models/tobi.glb", group, Math.PI, initialAnim);
 
+    function loadGuestGLB(url, pos, scale, animName, rotY = 0, orbitFn = null) {
+      if (typeof THREE.GLTFLoader === "undefined") return;
+      new THREE.GLTFLoader().load(url, (gltf) => {
+        const m = gltf.scene;
+        m.scale.setScalar(scale);
+        m.position.set(...pos);
+        m.rotation.y = rotY;
+        group.add(m);
+        const mixer = new THREE.AnimationMixer(m);
+        mixers.push(mixer);
+        const clips = gltf.animations || [];
+        const clip = clips.find((c) => c.name.toLowerCase().includes(animName.toLowerCase())) || clips[0];
+        if (clip) mixer.clipAction(clip).play();
+        if (orbitFn) animatedItems.push({ obj: m, type: "custom", fn: orbitFn });
+      });
+    }
+
+    // Add story-specific Blender guest characters!
+    if (d === 2) {
+      loadGuestGLB("models/paul.glb", [0, 0, -0.35], 0.58, "Walk", 0.3);
+    } else if (d === 4) {
+      loadGuestGLB("models/anky.glb", [0, 0, 0.25], 0.65, "Sleep", -0.4);
+    } else if (d === 5 || d === 21) {
+      loadGuestGLB("models/fips.glb", [0, 1.35, 0], 0.65, "Fly", 0, (obj, t) => {
+        const a = t * 1.1;
+        obj.position.set(Math.cos(a) * 0.95, 1.3 + Math.sin(t * 2) * 0.15, Math.sin(a) * 0.95);
+        obj.rotation.y = -a;
+      });
+    } else if (d === 8) {
+      loadGuestGLB("models/stella.glb", [0, 0, 0.1], 0.62, "Happy", -0.3);
+    } else if (d === 12) {
+      loadGuestGLB("models/turtle.glb", [-0.45, 0, 0.2], 0.45, "Dance", 0.2);
+      loadGuestGLB("models/turtle.glb", [0, 0, -0.2], 0.48, "Dance", 0.0);
+      loadGuestGLB("models/turtle.glb", [0.45, 0, 0.2], 0.45, "Dance", -0.2);
+    } else if (d === 14) {
+      loadGuestGLB("models/paul.glb", [0, 0, 0], 0.68, "Sleep", 1.2);
+    } else if (d === 24) {
+      // Grand Finale: All Dino friends celebrate!
+      loadGuestGLB("models/fips.glb", [0, 1.5, 0], 0.55, "Fly", 0, (obj, t) => {
+        const a = t * 1.2;
+        obj.position.set(Math.cos(a) * 1.15, 1.45 + Math.sin(t * 2) * 0.12, Math.sin(a) * 1.15);
+        obj.rotation.y = -a;
+      });
+      loadGuestGLB("models/stella.glb", [-0.75, 0, -0.75], 0.5, "Happy", 0.6);
+      loadGuestGLB("models/paul.glb", [0.75, 0, -0.8], 0.48, "Walk", -0.6);
+    }
+
     // Scene-specific 3D centerpiece in the middle of the table
     if (d === 1 || d === 24) {
       const stone = new THREE.Mesh(
@@ -392,7 +439,9 @@ window.HologramPlayer = (function () {
     }
 
     animatedItems.forEach((item) => {
-      if (item.type === "spin") {
+      if (item.type === "custom" && item.fn) {
+        item.fn(item.obj, t);
+      } else if (item.type === "spin") {
         item.obj.rotation.y = t * 1.4;
         item.obj.rotation.x = Math.sin(t) * 0.3;
       } else if (item.type === "bob") {
