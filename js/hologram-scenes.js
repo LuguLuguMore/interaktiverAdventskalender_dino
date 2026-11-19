@@ -217,16 +217,38 @@ window.HologramPlayer = (function () {
       loadGuestGLB("models/paul.glb", [0.75, 0, -0.8], 0.48, "Walk", -0.6);
     }
 
-    // Add Poly Haven Nature Props (Farntal ferns, fallen log, boulders)
+    // Add Poly Haven Nature Props & Blender Story Landmarks!
     if ([1, 2, 4, 8, 9, 11, 13, 19, 21, 23].includes(d)) {
       loadGuestGLB("models/fern.glb", [-0.9, -0.05, -0.9], 0.65, "", 0.4);
       loadGuestGLB("models/fern.glb", [0.95, -0.05, -0.85], 0.55, "", -0.8);
     }
+    if ([1, 2, 3, 4, 7, 8, 9, 11, 13, 19, 21, 23].includes(d)) {
+      loadGuestGLB("models/palm.glb", [-1.35, -0.05, -1.1], 0.55, "", 0.3);
+      loadGuestGLB("models/palm.glb", [1.35, -0.05, -1.05], 0.50, "", -0.5);
+    }
     if ([7, 15, 18].includes(d)) {
-      loadGuestGLB("models/log.glb", [0, 0.05, 0], 0.85, "", 0.3);
+      loadGuestGLB("models/log.glb", [0, 0.06, 0], 0.85, "", 0.1);
     }
     if ([5, 6, 22].includes(d)) {
-      loadGuestGLB("models/rock.glb", [-0.85, 0, -0.75], 0.75, "", 0.5);
+      loadGuestGLB("models/rock.glb", [-1.05, 0, -0.85], 0.75, "", 0.5);
+    }
+    if (d === 3) {
+      loadGuestGLB("models/volcano.glb", [0, -0.05, -0.35], 0.55, "", 0.0);
+    }
+    if ([6, 22, 24].includes(d)) {
+      loadGuestGLB("models/crystal_cave.glb", [0, -0.05, -0.65], 0.65, "", 0.0);
+    }
+    if (d === 7) {
+      loadGuestGLB("models/river.glb", [0, -0.04, 0], 0.32, "", 1.45);
+    }
+    if (d === 9) {
+      loadGuestGLB("models/footprint.glb", [0, -0.04, 0], 0.75, "", 0.2);
+    }
+    if (d === 11) {
+      loadGuestGLB("models/mud_pit.glb", [0, -0.04, 0], 0.75, "", 0.0);
+    }
+    if (d === 13) {
+      loadGuestGLB("models/four_paths.glb", [0, -0.04, 0], 0.65, "", 0.0);
     }
 
     // Scene-specific 3D centerpiece in the middle of the table
