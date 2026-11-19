@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AR &amp; Hologramm – Rexi &amp; Tobi</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+</head>
+<body class="holo-body">
+  <video id="ar-camera" autoplay playsinline muted></video>
+  <div id="holo-canvas-container"></div>
+  <div class="holo-center-cross" id="center-cross" style="display:none;" title="Pyramiden-Mitte"></div>
+
+  <div class="ar-camera-notice" id="camera-notice"></div>
+
+  <div class="holo-hud" id="holo-hud">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+      <a href="index.html" class="holo-pill">⬅️ Kalender</a>
+      <span class="holo-pill" id="holo-day-label" style="border-color:rgba(246,201,84,0.6);color:#f6c954;">Tag 1</span>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="holo-pill" id="btn-toggle-mode">📷 Modus: AR-Tisch</button>
+      <button class="holo-pill" id="btn-holo-speak">🔊 Vorlesen</button>
+      <button class="holo-pill" id="btn-fullscreen">⛶ Vollbild</button>
+    </div>
+  </div>
+
+  <div class="ar-controls-bar" id="ar-controls">
+    <label for="ar-scale">Größe:</label>
+    <input type="range" id="ar-scale" min="0.4" max="1.8" step="0.05" value="1.0" />
+  </div>
+
+  <div class="holo-bottom-tip" id="holo-tip">
+    Kamera auf den Tisch richten • Finger ziehen zum Drehen/Verschieben • Tippen blendet Menü aus
+  </div>
+
+  <script src="js/stories.js"></script>
+  <script src="js/tts.js"></script>
+  <script src="js/hologram-scenes.js"></script>
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const dayNum = Math.min(24, Math.max(1, parseInt(params.get("day") || "1", 10) || 1));
+      const story = window.ADVENT_STORIES.find((s) => s.day === dayNum) || window.ADVENT_STORIES[0];
+
+      document.title = `AR Tag ${story.day}: ${story.title}`;
+      document.getElementById("holo-day-label").textContent = `Tag ${story.day}: ${story.title}`;
+
+      const video = document.getElementById("ar-camera");
+      const notice = document.getElementById("camera-notice");
+      const container = document.getElementById("holo-canvas-container");
+      const hud = document.getElementById("holo-hud");
+      const tip = document.getElementById("holo-tip");
+      const cross = document.getElementById("center-cross");
+      const arControls = document.getElementById("ar-controls");
+      const scaleSlider = document.getElementById("ar-scale");
+      const btnMode = document.getElementById("btn-toggle-mode");
+      const btnSpeak = document.getElementById("btn-holo-speak");
+      const btnFs = document.getElementById("btn-fullscreen");
+
+      let cameraStream = null;
+      const modes = ["ar", "single", "pyramid"];
+      let modeIdx = 0; // Start in AR-Tisch-Modus
+
+      async function startCamera() {
+        notice.style.display = "none";
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          notice.innerHTML =
+            "<strong>Kamera nicht verfügbar:</strong> Auf dem Smartphone benötigt die Kamera eine <strong>HTTPS</strong>-Verbindung (z. B. über GitHub Pages, Netlify oder ngrok).";
+          notice.style.display = "block";
+          return;
+        }
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } },
+            audio: false
+          });
+          video.srcObject = cameraStream;
+          video.style.display = "block";
+        } catch (err) {
+          notice.innerHTML =
+            "<strong>Kamera-Zugriff blockiert:</strong> Bitte Kamera erlauben oder über <strong>HTTPS</strong> öffnen.";
+          notice.style.display = "block";
+        }
+      }
+
+      function stopCamera() {
+        if (cameraStream) {
+          cameraStream.getTracks().forEach((t) => t.stop());
+          cameraStream = null;
+        }
+        video.style.display = "none";
+        notice.style.display = "none";
+      }
+
+      window.HologramPlayer.init(container, story, "ar");
+      startCamera();
+
+      scaleSlider.addEventListener("input", (e) => {
+        window.HologramPlayer.setScale(parseFloat(e.target.value));
+      });
+
+      btnMode.addEventListener("click", (e) => {
+        e.stopPropagation();
+        modeIdx = (modeIdx + 1) % modes.length;
+        const m = modes[modeIdx];
+        window.HologramPlayer.setMode(m);
+
+        if (m === "ar") {
+          btnMode.textContent = "📷 Modus: AR-Tisch";
+          cross.style.display = "none";
+          arControls.style.display = "flex";
+          tip.textContent = "Kamera auf den Tisch richten • Finger ziehen zum Drehen/Verschieben";
+          startCamera();
+        } else if (m === "single") {
+          btnMode.textContent = "🔄 Modus: 3D-Ansicht";
+          cross.style.display = "none";
+          arControls.style.display = "none";
+          tip.textContent = "Finger ziehen zum Drehen • Tippen blendet Menü aus";
+          stopCamera();
+        } else {
+          btnMode.textContent = "🔺 Modus: Pyramide";
+          cross.style.display = "block";
+          arControls.style.display = "none";
+          tip.textContent = "Pyramide in die Mitte stellen • Bildschirm hell";
+          stopCamera();
+        }
+      });
+
+      btnSpeak.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (window.StoryReader.getState() === "playing") {
+          window.StoryReader.stop();
+          btnSpeak.textContent = "🔊 Vorlesen";
+        } else {
+          const txt = `Teil ${story.day}: ${story.title}. ${story.text}`;
+          window.StoryReader.speak(txt, 0.94, (state) => {
+            btnSpeak.textContent = state === "playing" ? "⏹️ Stopp" : "🔊 Vorlesen";
+          });
+        }
+      });
+
+      btnFs.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      });
+
+      let hudVisible = true;
+      container.addEventListener("click", () => {
+        hudVisible = !hudVisible;
+        hud.classList.toggle("hidden", !hudVisible);
+        tip.style.display = hudVisible ? "block" : "none";
+        if (modes[modeIdx] === "ar") {
+          arControls.style.display = hudVisible ? "flex" : "none";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ausmalbilder &amp; QR-Codes drucken – Rexi &amp; Tobi</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+  <header class="top-header no-print">
+    <h1>🖍️ Ausmalbuch &amp; Hologramm-QR-Codes</h1>
+    <p>
+      Drucke die 24 Ausmalbilder für die Kinder aus. Unten rechts auf jeder Seite befindet sich der passende QR-Code für das Smartphone-Hologramm!
+    </p>
+    <nav class="nav-bar">
+      <a href="index.html" class="btn btn-secondary">⬅️ Zurück zum Adventskalender</a>
+      <button onclick="window.print()" class="btn btn-primary">🖨️ Jetzt drucken / Als PDF speichern</button>
+    </nav>
+  </header>
+
+  <section class="print-controls no-print">
+    <strong>⚙️ QR-Code Ziel-Adresse (Basis-URL für das Natel):</strong>
+    <p style="margin: 0.3rem 0 0.6rem; font-size: 0.88rem; color: var(--text-muted);">
+      Damit der QR-Code auf dem Smartphone funktioniert, muss hier eine Adresse stehen, die das Natel erreichen kann (z. B. eure lokale WLAN-IP wie <code>http://192.168.1.42:8000/</code> oder eure GitHub-Pages/Netlify-URL).
+    </p>
+    <div class="print-controls-row">
+      <input type="text" id="base-url-input" class="url-input" />
+      <button id="btn-update-qr" class="btn btn-holo">🔄 QR-Codes aktualisieren</button>
+    </div>
+    <div class="print-controls-row" style="margin-top: 1rem;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="toggle-story-text" checked />
+        Vorlesetext auf jeder Seite mitdrucken
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="toggle-pyramid-template" checked />
+        Bastelvorlage für Hologramm-Pyramide anhängen
+      </label>
+      <select id="day-filter" class="url-input" style="max-width:220px;">
+        <option value="all">Alle 24 Tage anzeigen</option>
+      </select>
+    </div>
+  </section>
+
+  <main id="sheets-container"></main>
+
+  <script src="js/lan-config.js"></script>
+  <script src="js/stories.js"></script>
+  <script src="js/coloring-svgs.js"></script>
+  <script>
+    (function () {
+      const urlParams = new URLSearchParams(window.location.search);
+      const initialDay = urlParams.get("day") || "all";
+
+      const baseInput = document.getElementById("base-url-input");
+      const dayFilter = document.getElementById("day-filter");
+      const toggleText = document.getElementById("toggle-story-text");
+      const togglePyramid = document.getElementById("toggle-pyramid-template");
+      const container = document.getElementById("sheets-container");
+
+      // Default Base URL (automatisch WLAN-IP verwenden, wenn lokal geöffnet)
+      const host = window.location.hostname;
+      const defaultBase =
+        (host === "localhost" || host === "127.0.0.1") && window.LAN_BASE_URL
+          ? window.LAN_BASE_URL
+          : window.location.origin +
+            window.location.pathname.replace(/ausmalbilder\.html$/, "");
+      baseInput.value = defaultBase;
+
+      // Populate Day Filter
+      window.ADVENT_STORIES.forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = String(s.day);
+        opt.textContent = `Nur Türchen ${s.day}: ${s.title}`;
+        dayFilter.appendChild(opt);
+      });
+      if (initialDay !== "all") {
+        dayFilter.value = initialDay;
+      }
+
+      function createQrSvg(url) {
+        if (typeof qrcode === "undefined") {
+          return `<div style="font-size:10px;border:1px solid #000;padding:8px;">QR Offline</div>`;
+        }
+        const qr = qrcode(0, "M");
+        qr.addData(url);
+        qr.make();
+        return qr.createSvgTag({ cellSize: 3, margin: 1 });
+      }
+
+      function renderSheets() {
+        let base = baseInput.value.trim();
+        if (!base.endsWith("/")) base += "/";
+
+        const selected = dayFilter.value;
+        const showText = toggleText.checked;
+        const showPyramid = togglePyramid.checked;
+
+        container.innerHTML = "";
+
+        const storiesToRender =
+          selected === "all"
+            ? window.ADVENT_STORIES
+            : window.ADVENT_STORIES.filter((s) => String(s.day) === selected);
+
+        storiesToRender.forEach((story) => {
+          const holoUrl = `${base}hologram.html?day=${story.day}`;
+          const sheet = document.createElement("article");
+          sheet.className = "a4-sheet";
+          sheet.id = `day-${story.day}`;
+          sheet.innerHTML = `
+            <div class="a4-header">
+              <div class="a4-day-badge">Türchen ${story.day}</div>
+              <h2 class="a4-title">${story.title}</h2>
+            </div>
+            <div class="a4-art-frame">
+              ${window.ColoringSVGs.getSVG(story.day)}
+            </div>
+            <div class="a4-footer">
+              <div class="a4-story-box">
+                ${showText ? `<p style="margin:0;">${story.text}</p>` : `<p style="margin:0;color:#666;">Male das Bild bunt aus und scanne dann den QR-Code!</p>`}
+              </div>
+              <div class="a4-qr-box">
+                ${createQrSvg(holoUrl)}
+                <div class="qr-caption">📱 Scannen für<br/>3D-Hologramm!</div>
+              </div>
+            </div>
+          `;
+          container.appendChild(sheet);
+        });
+
+        if (showPyramid) {
+          const pyrSheet = document.createElement("article");
+          pyrSheet.className = "a4-sheet";
+          pyrSheet.innerHTML = `
+            <div class="a4-header">
+              <div class="a4-day-badge">Bastelvorlage</div>
+              <h2 class="a4-title">Hologramm-Pyramide für das Smartphone</h2>
+            </div>
+            <div style="margin: 12px 0; font-size: 1rem; line-height: 1.55;">
+              <strong>So bastelt ihr eure eigene Hologramm-Pyramide:</strong>
+              <ol>
+                <li>Drucke diese Seite aus und übertrage die Schablone <strong>4-mal</strong> auf eine feste, durchsichtige Folie (z. B. Overheadfolie, transparente Verpackung oder eine alte CD-Hülle).</li>
+                <li>Schneide alle 4 Trapeze sauber aus.</li>
+                <li>Klebe die 4 Teile an den schrägen Seitenkanten mit durchsichtigem Klebeband (Tesa) zu einem Trichter / einer Pyramide ohne Spitze zusammen.</li>
+                <li>Scanne den QR-Code auf dem Ausmalbild, mach das Zimmer etwas dunkler und stelle die Pyramide mit der kleinen Öffnung nach unten genau in die Mitte des Smartphone-Bildschirms!</li>
+              </ol>
+            </div>
+            <div class="a4-art-frame" style="border-style: solid; border-color: #ccc;">
+              <!-- Exact Trapezoid Template: top 1cm, bottom 6cm, height 3.5cm (scaled in mm inside viewBox) -->
+              <svg viewBox="0 0 180 120" xmlns="http://www.w3.org/2000/svg" style="max-height:110mm;">
+                <g stroke="#111" stroke-width="0.8" fill="none">
+                  <!-- 4 connected trapezoids or 1 large clear template -->
+                  <polygon points="80,25 100,25 150,95 30,95" fill="#f7fbff" stroke-width="1.2"/>
+                  <text x="90" y="20" text-anchor="middle" font-size="6" fill="#111" stroke="none">1 cm (Oben / auf Display)</text>
+                  <text x="90" y="106" text-anchor="middle" font-size="6" fill="#111" stroke="none">6 cm (Breite)</text>
+                  <line x1="90" y1="25" x2="90" y2="95" stroke-dasharray="2,2"/>
+                  <text x="93" y="62" font-size="6" fill="#111" stroke="none">3,5 cm Höhe</text>
+                </g>
+              </svg>
+            </div>
+            <div class="a4-footer">
+              <div class="a4-story-box">
+                <strong>Tipp:</strong> Kein Plastik zur Hand? Im Hologramm-Modus auf dem Natel gibt es auch den Knopf <em>„3D-Einzelansicht“</em> – damit schwebt der Dino auch ohne Pyramide in 3D auf dem Bildschirm!
+              </div>
+            </div>
+          `;
+          container.appendChild(pyrSheet);
+        }
+      }
+
+      document.getElementById("btn-update-qr").addEventListener("click", renderSheets);
+      dayFilter.addEventListener("change", renderSheets);
+      toggleText.addEventListener("change", renderSheets);
+      togglePyramid.addEventListener("change", renderSheets);
+
+      renderSheets();
+    })();
+  </script>
+</body>
+</html>

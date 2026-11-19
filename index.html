@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interaktiver Adventskalender – Rexi &amp; Tobi</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+  <header class="top-header">
+    <h1>🎄 Die Abenteuer von Rexi &amp; Tobi</h1>
+    <p>
+      Ein interaktiver 24-teiliger Adventskalender zum <strong>Vorlesen</strong>,
+      <strong>Ausmalen</strong> und als <strong>Smartphone-Hologramm</strong>!
+    </p>
+    <nav class="nav-bar">
+      <a href="ausmalbilder.html" class="btn btn-primary">🖍️ Alle Ausmalbilder &amp; QR-Codes drucken</a>
+      <a href="hologram.html?day=1" class="btn btn-holo">✨ Hologramm-Modus testen</a>
+      <button id="btn-reset-doors" class="btn btn-secondary" title="Alle Türchen zurücksetzen">🔄 Türchen zurücksetzen</button>
+    </nav>
+  </header>
+
+  <main class="calendar-grid" id="calendar-grid"></main>
+
+  <!-- Story Modal -->
+  <div class="modal-backdrop" id="story-modal" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <button class="modal-close" id="modal-close" aria-label="Schließen">✕</button>
+      <span class="modal-day-tag" id="modal-day-tag">Türchen 1</span>
+      <h2 id="modal-title">Titel</h2>
+
+      <div class="story-text" id="modal-text"></div>
+
+      <div class="modal-actions" style="margin-bottom: 1.2rem;">
+        <button class="btn btn-primary" id="btn-speak">🔊 Geschichte vorlesen</button>
+        <button class="btn btn-secondary" id="btn-pause-speak" style="display:none;">⏸️ Pause</button>
+        <button class="btn btn-secondary" id="btn-stop-speak" style="display:none;">⏹️ Stopp</button>
+      </div>
+
+      <div class="modal-preview-row">
+        <div class="coloring-preview-box" id="modal-svg-box"></div>
+        <div class="qr-preview-box">
+          <div id="modal-qr"></div>
+          <small>Mit dem Natel scannen für das 3D-Hologramm!</small>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <a id="btn-open-holo" href="hologram.html?day=1" class="btn btn-holo">✨ Hologramm auf diesem Gerät öffnen</a>
+        <a id="btn-open-print" href="ausmalbilder.html#day-1" class="btn btn-secondary">🖨️ Dieses Ausmalbild drucken</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/lan-config.js"></script>
+  <script src="js/stories.js"></script>
+  <script src="js/coloring-svgs.js"></script>
+  <script src="js/tts.js"></script>
+  <script>
+    (function () {
+      const STORAGE_KEY = "rexi_tobi_opened_doors";
+      let openedDoors = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      let currentStory = null;
+
+      const grid = document.getElementById("calendar-grid");
+      const modal = document.getElementById("story-modal");
+      const modalClose = document.getElementById("modal-close");
+      const btnSpeak = document.getElementById("btn-speak");
+      const btnPause = document.getElementById("btn-pause-speak");
+      const btnStop = document.getElementById("btn-stop-speak");
+
+      function getBaseUrl() {
+        const host = window.location.hostname;
+        if ((host === "localhost" || host === "127.0.0.1") && window.LAN_BASE_URL) {
+          return window.LAN_BASE_URL;
+        }
+        let base = window.location.origin + window.location.pathname.replace(/index\.html$/, "");
+        if (!base.endsWith("/")) base += "/";
+        return base;
+      }
+
+      function renderQR(container, url) {
+        container.innerHTML = "";
+        if (typeof qrcode === "undefined") {
+          container.innerHTML = "<small>QR-Bibliothek offline</small>";
+          return;
+        }
+        const qr = qrcode(0, "M");
+        qr.addData(url);
+        qr.make();
+        container.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2 });
+      }
+
+      function renderGrid() {
+        grid.innerHTML = "";
+        window.ADVENT_STORIES.forEach((story) => {
+          const isOpened = openedDoors.includes(story.day);
+          const card = document.createElement("button");
+          card.className = "door-card" + (isOpened ? " opened" : "");
+          card.innerHTML = `
+            <span class="door-badge">${isOpened ? "⭐" : "🔒"}</span>
+            <div class="door-number">${story.day}</div>
+            <div class="door-title">${story.title}</div>
+          `;
+          card.addEventListener("click", () => openStory(story));
+          grid.appendChild(card);
+        });
+      }
+
+      function openStory(story) {
+        currentStory = story;
+        if (!openedDoors.includes(story.day)) {
+          openedDoors.push(story.day);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(openedDoors));
+          renderGrid();
+        }
+
+        document.getElementById("modal-day-tag").textContent = `Türchen ${story.day} von 24`;
+        document.getElementById("modal-title").textContent = story.title;
+        document.getElementById("modal-text").textContent = story.text;
+        document.getElementById("modal-svg-box").innerHTML = window.ColoringSVGs.getSVG(story.day);
+
+        const holoUrl = `${getBaseUrl()}hologram.html?day=${story.day}`;
+        renderQR(document.getElementById("modal-qr"), holoUrl);
+
+        document.getElementById("btn-open-holo").href = `hologram.html?day=${story.day}`;
+        document.getElementById("btn-open-print").href = `ausmalbilder.html?day=${story.day}`;
+
+        modal.classList.add("active");
+      }
+
+      function closeModal() {
+        window.StoryReader.stop();
+        modal.classList.remove("active");
+      }
+
+      function updateSpeechUI(state) {
+        if (state === "playing") {
+          btnSpeak.style.display = "none";
+          btnPause.style.display = "inline-flex";
+          btnPause.textContent = "⏸️ Pause";
+          btnStop.style.display = "inline-flex";
+        } else if (state === "paused") {
+          btnSpeak.style.display = "none";
+          btnPause.style.display = "inline-flex";
+          btnPause.textContent = "▶️ Weiter";
+          btnStop.style.display = "inline-flex";
+        } else {
+          btnSpeak.style.display = "inline-flex";
+          btnPause.style.display = "none";
+          btnStop.style.display = "none";
+        }
+      }
+
+      btnSpeak.addEventListener("click", () => {
+        if (!currentStory) return;
+        const fullText = `Teil ${currentStory.day}: ${currentStory.title}. ${currentStory.text}`;
+        window.StoryReader.speak(fullText, 0.94, updateSpeechUI);
+      });
+
+      btnPause.addEventListener("click", () => window.StoryReader.togglePause());
+      btnStop.addEventListener("click", () => window.StoryReader.stop());
+
+      modalClose.addEventListener("click", closeModal);
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      document.getElementById("btn-reset-doors").addEventListener("click", () => {
+        openedDoors = [];
+        localStorage.removeItem(STORAGE_KEY);
+        renderGrid();
+      });
+
+      renderGrid();
+    })();
+  </script>
+</body>
+</html>
