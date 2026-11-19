@@ -217,6 +217,18 @@ window.HologramPlayer = (function () {
       loadGuestGLB("models/paul.glb", [0.75, 0, -0.8], 0.48, "Walk", -0.6);
     }
 
+    // Add Poly Haven Nature Props (Farntal ferns, fallen log, boulders)
+    if ([1, 2, 4, 8, 9, 11, 13, 19, 21, 23].includes(d)) {
+      loadGuestGLB("models/fern.glb", [-0.9, -0.05, -0.9], 0.65, "", 0.4);
+      loadGuestGLB("models/fern.glb", [0.95, -0.05, -0.85], 0.55, "", -0.8);
+    }
+    if ([7, 15, 18].includes(d)) {
+      loadGuestGLB("models/log.glb", [0, 0.05, 0], 0.85, "", 0.3);
+    }
+    if ([5, 6, 22].includes(d)) {
+      loadGuestGLB("models/rock.glb", [-0.85, 0, -0.75], 0.75, "", 0.5);
+    }
+
     // Scene-specific 3D centerpiece in the middle of the table
     if (d === 1 || d === 24) {
       const stone = new THREE.Mesh(
