@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>AR &amp; Hologramm – Rexi &amp; Tobi</title>
   <link rel="stylesheet" href="css/style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body class="holo-body">
   <video id="ar-camera" autoplay playsinline muted></video>
@@ -20,6 +21,7 @@
       <span class="holo-pill" id="holo-day-label" style="border-color:rgba(246,201,84,0.6);color:#f6c954;">Tag 1</span>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="holo-pill" id="btn-toggle-pose">🐾 Pose: Walk</button>
       <button class="holo-pill" id="btn-toggle-mode">📷 Modus: AR-Tisch</button>
       <button class="holo-pill" id="btn-holo-speak">🔊 Vorlesen</button>
       <button class="holo-pill" id="btn-fullscreen">⛶ Vollbild</button>
@@ -55,6 +57,7 @@
       const cross = document.getElementById("center-cross");
       const arControls = document.getElementById("ar-controls");
       const scaleSlider = document.getElementById("ar-scale");
+      const btnPose = document.getElementById("btn-toggle-pose");
       const btnMode = document.getElementById("btn-toggle-mode");
       const btnSpeak = document.getElementById("btn-holo-speak");
       const btnFs = document.getElementById("btn-fullscreen");
@@ -62,6 +65,19 @@
       let cameraStream = null;
       const modes = ["ar", "single", "pyramid"];
       let modeIdx = 0; // Start in AR-Tisch-Modus
+      const poses = ["Walk", "Happy", "Idle", "Sleep"];
+      const poseLabels = { Walk: "Laufen", Happy: "Jubeln", Idle: "Warten", Sleep: "Schlafen" };
+      let poseIdx = 0;
+
+      btnPose.addEventListener("click", (e) => {
+        e.stopPropagation();
+        poseIdx = (poseIdx + 1) % poses.length;
+        const p = poses[poseIdx];
+        btnPose.textContent = `🐾 Pose: ${poseLabels[p]}`;
+        if (window.HologramPlayer.setAnimation) {
+          window.HologramPlayer.setAnimation(p);
+        }
+      });
 
       async function startCamera() {
         notice.style.display = "none";

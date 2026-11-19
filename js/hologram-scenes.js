@@ -1,9 +1,7 @@
 /**
- * 3D & AR-Tisch-Szenen (Three.js)
- * Unterstützt:
- * 1) "ar"      – Kamera-AR (Dinos laufen auf dem Tisch!) + optional WebXR
- * 2) "single"  – 3D-Einzelansicht (drehbar)
- * 3) "pyramid" – 4-Fach Pepper's Ghost Pyramiden-Hologramm
+ * 3D & AR-Tisch-Szenen (Three.js + Blender GLB Rigged Dinos)
+ * Lädt models/rexi.glb & models/tobi.glb mit ihren Blender-Animationen
+ * (Walk, Happy, Idle, Sleep) und fällt bei Bedarf auf prozedurale Dinos zurück.
  */
 window.HologramPlayer = (function () {
   let renderer, scene, cameras = [], singleCamera;
@@ -13,8 +11,12 @@ window.HologramPlayer = (function () {
   let walkingDinos = [];
   let animatedItems = [];
   let particleSystem = null;
+  let mixers = [];
+  let dinoControllers = []; // { mixer, clips, currentAction, root, radius, speed, phase }
+  let currentAnimName = "Walk";
+  const clock = new THREE.Clock();
 
-  // User interaction state (AR & Single mode)
+  // User interaction state
   let userRotY = 0;
   let userScale = 1.0;
   let userOffsetX = 0;
@@ -43,109 +45,6 @@ window.HologramPlayer = (function () {
     mesh.add(wire);
   }
 
-  // Build 3D Cute T-Rex (Rexi) with articulated legs for walking
-  function buildRexi(color = 0x33dd77) {
-    const g = new THREE.Group();
-    const mat = makeHoloMat(color, false, 0.92);
-
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), mat);
-    body.scale.set(0.9, 1.15, 1.1);
-    body.position.set(0, 0.55, 0);
-    makeWireOverlay(body, 0xffffff);
-    g.add(body);
-
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.48, 0.72), mat);
-    head.position.set(0, 1.28, 0.38);
-    makeWireOverlay(head, 0xffffff);
-    g.add(head);
-
-    const eyeMat = makeHoloMat(0xffffff, false, 1);
-    [-0.22, 0.22].forEach((ex) => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), eyeMat);
-      eye.position.set(ex, 1.38, 0.72);
-      g.add(eye);
-    });
-
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.26, 1.0, 10), mat);
-    tail.rotation.x = -Math.PI / 2.4;
-    tail.position.set(0, 0.38, -0.78);
-    g.add(tail);
-
-    const legs = [];
-    [-0.26, 0.26].forEach((lx) => {
-      const legPivot = new THREE.Group();
-      legPivot.position.set(lx, 0.2, 0);
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.55, 10), mat);
-      leg.position.set(0, -0.25, 0);
-      legPivot.add(leg);
-      g.add(legPivot);
-      legs.push(legPivot);
-    });
-
-    [-0.36, 0.36].forEach((ax) => {
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 8), mat);
-      arm.rotation.x = Math.PI / 3;
-      arm.position.set(ax, 0.72, 0.45);
-      g.add(arm);
-    });
-
-    g.userData.legs = legs;
-    return g;
-  }
-
-  // Build 3D Cute Triceratops (Tobi) with articulated legs
-  function buildTobi(color = 0x44bbff) {
-    const g = new THREE.Group();
-    const mat = makeHoloMat(color, false, 0.92);
-
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.58, 16, 12), mat);
-    body.scale.set(0.95, 0.85, 1.25);
-    body.position.set(0, 0.45, 0);
-    makeWireOverlay(body, 0xffffff);
-    g.add(body);
-
-    const frill = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.46, 0.12, 16), mat);
-    frill.rotation.x = Math.PI / 2.3;
-    frill.position.set(0, 0.82, 0.52);
-    makeWireOverlay(frill, 0xffffff);
-    g.add(frill);
-
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.38, 0.52), mat);
-    head.position.set(0, 0.58, 0.72);
-    g.add(head);
-
-    const hornMat = makeHoloMat(0xffffaa, false, 0.95);
-    [-0.16, 0.16].forEach((hx) => {
-      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.48, 8), hornMat);
-      horn.rotation.x = Math.PI / 3;
-      horn.position.set(hx, 0.82, 0.96);
-      g.add(horn);
-    });
-    const noseHorn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.25, 8), hornMat);
-    noseHorn.rotation.x = Math.PI / 5;
-    noseHorn.position.set(0, 0.72, 1.0);
-    g.add(noseHorn);
-
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.75, 10), mat);
-    tail.rotation.x = -Math.PI / 2;
-    tail.position.set(0, 0.35, -0.78);
-    g.add(tail);
-
-    const legs = [];
-    [[-0.28, 0.32], [0.28, 0.32], [-0.28, -0.32], [0.28, -0.32]].forEach(([lx, lz]) => {
-      const legPivot = new THREE.Group();
-      legPivot.position.set(lx, 0.2, lz);
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.45, 8), mat);
-      leg.position.set(0, -0.2, 0);
-      legPivot.add(leg);
-      g.add(legPivot);
-      legs.push(legPivot);
-    });
-
-    g.userData.legs = legs;
-    return g;
-  }
-
   function buildFips(color = 0x55eeff) {
     const g = new THREE.Group();
     const mat = makeHoloMat(color, false, 0.9);
@@ -163,7 +62,7 @@ window.HologramPlayer = (function () {
     return g;
   }
 
-  function createParticles(colorHex, count = 70, spread = 3.5) {
+  function createParticles(colorHex, count = 65, spread = 3.6) {
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count * 3; i++) {
@@ -179,23 +78,77 @@ window.HologramPlayer = (function () {
     return new THREE.Points(geo, mat);
   }
 
+  function playClipOnController(ctrl, animName) {
+    if (!ctrl || !ctrl.clips || ctrl.clips.length === 0) return;
+    const clip =
+      ctrl.clips.find((c) => c.name.toLowerCase().includes(animName.toLowerCase())) ||
+      ctrl.clips[0];
+    if (!clip) return;
+    const nextAction = ctrl.mixer.clipAction(clip);
+    if (ctrl.currentAction === nextAction) return;
+    if (ctrl.currentAction) {
+      ctrl.currentAction.fadeOut(0.25);
+    }
+    nextAction.reset().fadeIn(0.25).play();
+    ctrl.currentAction = nextAction;
+  }
+
+  function setAnimation(animName) {
+    currentAnimName = animName;
+    dinoControllers.forEach((ctrl) => playClipOnController(ctrl, animName));
+  }
+
+  function loadGLBDino(url, targetGroup, phase, defaultAnim) {
+    if (typeof THREE.GLTFLoader === "undefined") return;
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      url,
+      (gltf) => {
+        const model = gltf.scene;
+        model.scale.setScalar(0.65);
+        targetGroup.add(model);
+
+        const mixer = new THREE.AnimationMixer(model);
+        mixers.push(mixer);
+
+        const ctrl = {
+          mixer,
+          clips: gltf.animations || [],
+          currentAction: null,
+          root: model,
+          radius: 1.05,
+          speed: 0.55,
+          phase
+        };
+        dinoControllers.push(ctrl);
+        playClipOnController(ctrl, defaultAnim);
+      },
+      undefined,
+      (err) => {
+        console.warn("GLB konnte nicht geladen werden:", url, err);
+      }
+    );
+  }
+
   function populateScene(story) {
     if (activeGroup) scene.remove(activeGroup);
     if (particleSystem) scene.remove(particleSystem);
     animatedItems = [];
     walkingDinos = [];
+    mixers = [];
+    dinoControllers = [];
 
     const group = new THREE.Group();
     const c1 = new THREE.Color(story.accentColor || "#44ddff").getHex();
     const c2 = new THREE.Color(story.secondaryColor || "#ff77ff").getHex();
 
-    // Table surface ring / shadow disc so it looks grounded on the table
+    // Table surface ring / shadow disc
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(1.75, 0.025, 12, 48),
       makeHoloMat(c1, false, 0.55)
     );
     ring.rotation.x = Math.PI / 2;
-    ring.position.y = -0.1;
+    ring.position.y = -0.05;
     group.add(ring);
 
     const tableDisc = new THREE.Mesh(
@@ -203,25 +156,24 @@ window.HologramPlayer = (function () {
       new THREE.MeshBasicMaterial({ color: c1, transparent: true, opacity: 0.08, side: THREE.DoubleSide })
     );
     tableDisc.rotation.x = Math.PI / 2;
-    tableDisc.position.y = -0.11;
+    tableDisc.position.y = -0.06;
     group.add(tableDisc);
 
-    // Add Rexi & Tobi walking on the table!
-    const rexi = buildRexi(0x33ee77);
-    rexi.scale.setScalar(0.62);
-    group.add(rexi);
-    walkingDinos.push({ obj: rexi, radius: 1.05, speed: 0.55, phase: 0 });
+    // Choose initial pose based on story day
+    const d = story.day;
+    let initialAnim = "Walk";
+    if ([4, 10, 14, 22].includes(d)) initialAnim = "Sleep";
+    else if ([1, 2, 12, 19, 23, 24].includes(d)) initialAnim = "Happy";
+    currentAnimName = initialAnim;
 
-    const tobi = buildTobi(0x44bbff);
-    tobi.scale.setScalar(0.62);
-    group.add(tobi);
-    walkingDinos.push({ obj: tobi, radius: 1.05, speed: 0.55, phase: Math.PI });
+    // Load Blender Rigged GLB Dinos!
+    loadGLBDino("models/rexi.glb", group, 0, initialAnim);
+    loadGLBDino("models/tobi.glb", group, Math.PI, initialAnim);
 
     // Scene-specific 3D centerpiece in the middle of the table
-    const d = story.day;
     if (d === 1 || d === 24) {
       const stone = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.48, 0),
+        new THREE.OctahedronGeometry(0.45, 0),
         makeHoloMat(c1, false, 0.92)
       );
       stone.position.set(0, 0.55, 0);
@@ -246,7 +198,7 @@ window.HologramPlayer = (function () {
         new THREE.ConeGeometry(0.65, 1.1, 16, 1, true),
         makeHoloMat(0xff5533, false, 0.82)
       );
-      volc.position.set(0, 0.45, 0);
+      volc.position.set(0, 0.5, 0);
       makeWireOverlay(volc, 0xffaa66);
       group.add(volc);
     } else if (d === 5 || d === 21) {
@@ -270,7 +222,7 @@ window.HologramPlayer = (function () {
           new THREE.ConeGeometry(0.15, 0.75 + (idx % 2) * 0.35, 6),
           makeHoloMat(idx === 1 ? c1 : c2, false, 0.88)
         );
-        crys.position.set(cx, 0.3, 0);
+        crys.position.set(cx, 0.35, 0);
         makeWireOverlay(crys, 0xffffff);
         group.add(crys);
       });
@@ -285,22 +237,22 @@ window.HologramPlayer = (function () {
       animatedItems.push({ obj: moon, type: "bob", phase: 0.3 });
     } else if (d === 16) {
       const b1 = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 12), makeHoloMat(0xffffff, false, 0.95));
-      b1.position.set(0, 0.15, 0);
+      b1.position.set(0, 0.2, 0);
       const b2 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 12), makeHoloMat(0xffffff, false, 0.95));
-      b2.position.set(0, 0.55, 0);
+      b2.position.set(0, 0.6, 0);
       group.add(b1, b2);
     } else if (d === 23) {
       const tree = new THREE.Mesh(
         new THREE.ConeGeometry(0.55, 1.2, 12),
         makeHoloMat(0x44ff88, false, 0.85)
       );
-      tree.position.set(0, 0.5, 0);
+      tree.position.set(0, 0.55, 0);
       makeWireOverlay(tree, 0xaaffcc);
       const star = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.15, 0),
         makeHoloMat(0xffee44, false, 1)
       );
-      star.position.set(0, 1.2, 0);
+      star.position.set(0, 1.25, 0);
       group.add(tree, star);
       animatedItems.push({ obj: star, type: "spin" });
     } else {
@@ -331,7 +283,6 @@ window.HologramPlayer = (function () {
       return;
     }
 
-    // alpha: true allows the live rear camera video to show behind the 3D dinos!
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, mode === "ar" ? 0 : 1);
@@ -341,7 +292,7 @@ window.HologramPlayer = (function () {
 
     scene = new THREE.Scene();
 
-    const amb = new THREE.AmbientLight(0xffffff, 0.85);
+    const amb = new THREE.AmbientLight(0xffffff, 0.95);
     const dir = new THREE.DirectionalLight(0xffffff, 1.25);
     dir.position.set(3, 6, 4);
     scene.add(amb, dir);
@@ -351,15 +302,14 @@ window.HologramPlayer = (function () {
       cameras.push(new THREE.PerspectiveCamera(40, 1, 0.1, 50));
     }
     singleCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 50);
-    singleCamera.position.set(0, 1.55, 4.3);
-    singleCamera.lookAt(0, 0.2, 0);
+    singleCamera.position.set(0, 1.65, 4.4);
+    singleCamera.lookAt(0, 0.25, 0);
 
     populateScene(story);
     onResize(container);
 
     window.addEventListener("resize", () => onResize(container));
 
-    // Touch / drag to rotate & move dinos on the table
     const dom = renderer.domElement;
     dom.addEventListener("pointerdown", (e) => {
       isDragging = true;
@@ -403,7 +353,10 @@ window.HologramPlayer = (function () {
 
   function animate() {
     animId = requestAnimationFrame(animate);
-    const t = performance.now() * 0.001;
+    const delta = clock.getDelta();
+    const t = clock.elapsedTime;
+
+    mixers.forEach((m) => m.update(delta));
 
     if (activeGroup) {
       if (mode === "ar") {
@@ -421,22 +374,16 @@ window.HologramPlayer = (function () {
       }
     }
 
-    // Animate Rexi & Tobi walking around the table!
-    walkingDinos.forEach((d) => {
-      const angle = t * d.speed + d.phase;
-      d.obj.position.x = Math.cos(angle) * d.radius;
-      d.obj.position.z = Math.sin(angle) * d.radius;
-      // Face walking direction (tangent to circle)
-      d.obj.rotation.y = -angle;
-      // Gentle walking bounce
-      d.obj.position.y = Math.abs(Math.sin(t * 6 + d.phase)) * 0.06;
-
-      // Swing legs
-      if (d.obj.userData.legs) {
-        d.obj.userData.legs.forEach((leg, idx) => {
-          const swing = Math.sin(t * 7 + d.phase + (idx % 2 === 0 ? 0 : Math.PI)) * 0.45;
-          leg.rotation.x = swing;
-        });
+    // Move GLB Dinos around the table when Walk is active, or face center otherwise
+    dinoControllers.forEach((ctrl) => {
+      const angle = (currentAnimName === "Walk" ? t * ctrl.speed : 0) + ctrl.phase;
+      ctrl.root.position.x = Math.cos(angle) * ctrl.radius;
+      ctrl.root.position.z = Math.sin(angle) * ctrl.radius;
+      if (currentAnimName === "Walk") {
+        ctrl.root.rotation.y = -angle;
+      } else {
+        // Face slightly toward viewer/center
+        ctrl.root.rotation.y = ctrl.phase === 0 ? -0.6 : 0.6;
       }
     });
 
@@ -503,5 +450,5 @@ window.HologramPlayer = (function () {
     });
   }
 
-  return { init, setMode, setScale, populateScene };
+  return { init, setMode, setScale, setAnimation, populateScene };
 })();
